@@ -7,10 +7,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import it.polito.tdp.extflightdelays.model.Airline;
 import it.polito.tdp.extflightdelays.model.Airport;
 import it.polito.tdp.extflightdelays.model.Flight;
+import it.polito.tdp.extflightdelays.model.Rotta;
 
 public class ExtFlightDelaysDAO {
 
@@ -37,7 +39,7 @@ public class ExtFlightDelaysDAO {
 		}
 	}
 
-	public List<Airport> loadAllAirports() {
+	/*public List<Airport> loadAllAirports() {
 		String sql = "SELECT * FROM airports";
 		List<Airport> result = new ArrayList<Airport>();
 
@@ -55,6 +57,34 @@ public class ExtFlightDelaysDAO {
 
 			conn.close();
 			return result;
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}*/
+	public void loadAllAirports(Map<Integer,Airport> idMap) {
+		String sql = "SELECT * FROM airports";
+
+		try {
+			Connection conn = ConnectDB.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			ResultSet rs = st.executeQuery();
+
+			while (rs.next()) {
+				if(!idMap.containsKey("ID")) {//ricreo l'oggetto solo se non c'era ancora nell'idMap
+					Airport airport = new Airport(rs.getInt("ID"), rs.getString("IATA_CODE"), rs.getString("AIRPORT"),
+							rs.getString("CITY"), rs.getString("STATE"), rs.getString("COUNTRY"), rs.getDouble("LATITUDE"),
+							rs.getDouble("LONGITUDE"), rs.getDouble("TIMEZONE_OFFSET"));
+					idMap.put(airport.getId(), airport);
+					//new fatte una volta sola!
+				}
+				
+			}
+
+			conn.close();
+			
 
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -86,6 +116,74 @@ public class ExtFlightDelaysDAO {
 			return result;
 
 		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}
+	
+	public List<Airport> getVertici(int x,Map<Integer,Airport> idMap){
+		String sql="SELECT a.id as id_vertice "
+				+ "FROM airports a, flights f "
+				+ "WHERE (a.ID=f.ORIGIN_AIRPORT_ID OR a.ID=f.DESTINATION_AIRPORT_ID) "
+				+ "GROUP BY a.id "
+				+ "HAVING COUNT(DISTINCT (f.AIRLINE_ID))>?";
+		
+		List<Airport> result=new LinkedList<>();
+		
+		try {
+			Connection conn = ConnectDB.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, x);
+			ResultSet rs = st.executeQuery();
+			
+			while (rs.next()) {
+				//non creo un nuovo oggetto perche' ho idMap
+				result.add(idMap.get(rs.getInt("id_vertice")));
+			}
+			rs.close();
+			st.close();
+			conn.close();
+			
+			return result;
+			
+		}catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}
+	
+	public List<Rotta> getRotte(Map<Integer,Airport> idMap){//serve passare la mappa perche' il costruttore di rotta ha oggetti
+		String sql="SELECT f.ORIGIN_AIRPORT_ID as id_a1,f.DESTINATION_AIRPORT_ID as id_a2,COUNT(*) AS n "
+				+ "FROM flights f "
+				+ "GROUP BY f.ORIGIN_AIRPORT_ID,f.DESTINATION_AIRPORT_ID";
+	
+		List<Rotta> result=new LinkedList<Rotta>();
+		
+		try {
+			Connection conn = ConnectDB.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			ResultSet rs = st.executeQuery();
+			
+			while (rs.next()) {
+				Airport sorgente=idMap.get(rs.getInt("id_a1"));
+				Airport destinazione=idMap.get(rs.getInt("id_a2"));
+				if(sorgente!=null && destinazione !=null) {
+					Rotta r=new Rotta(sorgente, destinazione, rs.getInt("n"));
+					result.add(r);
+				}
+				else
+					System.out.println("Errore in getRotte");
+				
+			}
+			rs.close();
+			st.close();
+			conn.close();
+			
+			return result;
+			
+		}catch (SQLException e) {
 			e.printStackTrace();
 			System.out.println("Errore connessione al database");
 			throw new RuntimeException("Error Connection Database");
